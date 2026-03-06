@@ -204,6 +204,19 @@ jobs:
           name: natives-macos
           path: .
 
+      - name: Download SDK redistributables
+        uses: actions/download-artifact@v4
+        with:
+          name: sdk-and-jni-sources
+          path: .
+
+      - name: Copy SDK redistributables to resources
+        run: |
+          cp sdk/redistributable_bin/steam_api.dll java-wrapper/src/main/resources/
+          cp sdk/redistributable_bin/win64/steam_api64.dll java-wrapper/src/main/resources/
+          cp sdk/redistributable_bin/linux64/libsteam_api.so java-wrapper/src/main/resources/
+          cp sdk/redistributable_bin/osx/libsteam_api.dylib java-wrapper/src/main/resources/
+
       - name: Commit changed natives
         run: |
           git config user.name "github-actions[bot]"
