@@ -9,6 +9,7 @@ final class SteamInventoryNative {
 	/*JNI
 		#include "SteamInventoryCallback.h"
 		#include <vector>
+		#include <cstdlib>
 	*/
 
 	static native long createCallback(SteamInventoryCallbackAdapter javaCallback); /*

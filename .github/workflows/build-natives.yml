@@ -1,0 +1,245 @@
+name: Build Native Libraries
+
+on:
+  workflow_dispatch:
+    inputs:
+      build_windows:
+        description: 'Build Windows native library'
+        type: boolean
+        default: true
+      build_linux:
+        description: 'Build Linux native library'
+        type: boolean
+        default: true
+      build_macos:
+        description: 'Build macOS native library'
+        type: boolean
+        default: true
+      deploy_only:
+        description: 'Skip build, only run deploy (uses DLLs already in repo)'
+        type: boolean
+        default: false
+      publish_to_alternative_repo:
+        description: 'Publish to alternative repository instead of Maven Central'
+        type: boolean
+        default: false
+
+env:
+  STEAMWORKS_SDK_SOURCE: "https://github.com/julianxhokaxhiu/SteamworksSDKCI/archive/refs/tags/1.62.zip"
+  DEPLOY_VERSION: "1.10.0-inventory"
+
+jobs:
+
+  prepare:
+    name: Download SDK and generate JNI code
+    if: ${{ !inputs.deploy_only }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download Steamworks SDK
+        run: |
+          curl -sL "${{ env.STEAMWORKS_SDK_SOURCE }}" -o steamworks_sdk.zip
+          unzip -q steamworks_sdk.zip
+          SDK_DIR=$(unzip -Z -1 steamworks_sdk.zip | head -1 | cut -d/ -f1)
+          mkdir -p sdk
+          cp -r "$SDK_DIR/steamworks_sdk/public" sdk/public
+          cp -r "$SDK_DIR/steamworks_sdk/redistributable_bin" sdk/redistributable_bin
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          java-version: '11'
+          distribution: 'temurin'
+
+      - name: Generate JNI code
+        run: |
+          mvn compile -pl java-wrapper,server,jnigen --no-transfer-progress
+          mvn exec:java -pl jnigen "-Dgpg.skip=true" "-Dexec.mainClass=com.codedisaster.steamworks.jnigen.JNICodeGenerator" --no-transfer-progress
+
+      - name: Upload SDK and generated sources
+        uses: actions/upload-artifact@v4
+        with:
+          name: sdk-and-jni-sources
+          retention-days: 1
+          path: |
+            sdk/
+            java-wrapper/src/main/native/
+            server/src/main/native/
+
+  build-linux:
+    name: Build Linux
+    if: ${{ !inputs.deploy_only && inputs.build_linux }}
+    needs: prepare
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download SDK and generated sources
+        uses: actions/download-artifact@v4
+        with:
+          name: sdk-and-jni-sources
+          path: .
+
+      - name: Install premake4
+        run: sudo apt-get install -y premake4
+
+      - name: Build
+        working-directory: build-natives
+        run: bash build-linux.sh
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: natives-linux
+          retention-days: 1
+          path: |
+            java-wrapper/src/main/resources/libsteamworks4j.so
+            server/src/main/resources/libsteamworks4j-server.so
+            server/src/main/resources/libsteamworks4j-encryptedappticket.so
+
+  build-windows:
+    name: Build Windows
+    if: ${{ !inputs.deploy_only && inputs.build_windows }}
+    needs: prepare
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download SDK and generated sources
+        uses: actions/download-artifact@v4
+        with:
+          name: sdk-and-jni-sources
+          path: .
+
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Install premake5
+        shell: pwsh
+        run: |
+          Invoke-WebRequest -Uri "https://github.com/premake/premake-core/releases/download/v5.0.0-beta8/premake-5.0.0-beta8-windows.zip" -OutFile premake5.zip
+          Expand-Archive -Path premake5.zip -DestinationPath premake5
+          echo "$env:GITHUB_WORKSPACE\premake5" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+      - name: Build
+        shell: cmd
+        run: cd build-natives && build-win.bat vs2022
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: natives-windows
+          retention-days: 1
+          path: |
+            java-wrapper/src/main/resources/steamworks4j.dll
+            java-wrapper/src/main/resources/steamworks4j64.dll
+            server/src/main/resources/steamworks4j-server.dll
+            server/src/main/resources/steamworks4j-server64.dll
+            server/src/main/resources/steamworks4j-encryptedappticket.dll
+            server/src/main/resources/steamworks4j-encryptedappticket64.dll
+
+  build-macos:
+    name: Build macOS
+    if: ${{ !inputs.deploy_only && inputs.build_macos }}
+    needs: prepare
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download SDK and generated sources
+        uses: actions/download-artifact@v4
+        with:
+          name: sdk-and-jni-sources
+          path: .
+
+      - name: Install premake5
+        run: brew install premake
+
+      - name: Build
+        working-directory: build-natives
+        run: bash build-osx.sh
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: natives-macos
+          retention-days: 1
+          path: |
+            java-wrapper/src/main/resources/libsteamworks4j.dylib
+            server/src/main/resources/libsteamworks4j-server.dylib
+            server/src/main/resources/libsteamworks4j-encryptedappticket.dylib
+
+  deploy:
+    name: Deploy to Maven
+    runs-on: ubuntu-latest
+    needs: [build-windows, build-linux, build-macos]
+    if: ${{ always() && !failure() && !cancelled() }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download Windows natives
+        if: ${{ !inputs.deploy_only && inputs.build_windows }}
+        uses: actions/download-artifact@v4
+        with:
+          name: natives-windows
+          path: .
+
+      - name: Download Linux natives
+        if: ${{ !inputs.deploy_only && inputs.build_linux }}
+        uses: actions/download-artifact@v4
+        with:
+          name: natives-linux
+          path: .
+
+      - name: Download macOS natives
+        if: ${{ !inputs.deploy_only && inputs.build_macos }}
+        uses: actions/download-artifact@v4
+        with:
+          name: natives-macos
+          path: .
+
+      - name: Set up Java (Maven Central)
+        if: ${{ !inputs.publish_to_alternative_repo }}
+        uses: actions/setup-java@v4
+        with:
+          java-version: '11'
+          distribution: 'temurin'
+
+      - name: Set up Java (alternative repository)
+        if: ${{ inputs.publish_to_alternative_repo }}
+        uses: actions/setup-java@v4
+        with:
+          java-version: '11'
+          distribution: 'temurin'
+          server-id: maven-repo
+          server-username: MAVEN_REPO_USERNAME
+          server-password: MAVEN_REPO_PASSWORD
+
+      - name: Deploy to Maven Central
+        if: ${{ !inputs.publish_to_alternative_repo }}
+        run: |
+          mvn versions:set -DnewVersion=${{ env.DEPLOY_VERSION }} -DprocessAllModules=true --no-transfer-progress
+          mvn deploy -Plibs -pl java-wrapper,server \
+            --no-transfer-progress \
+            -DskipTests
+
+      - name: Deploy to alternative repository
+        if: ${{ inputs.publish_to_alternative_repo }}
+        run: |
+          find . -name "pom.xml" -exec perl -i -0pe 's|\s*<plugin>\s*<groupId>org\.sonatype\.central</groupId>.*?</plugin>||gs' {} \;
+          mvn versions:set -DnewVersion=${{ env.DEPLOY_VERSION }} -DprocessAllModules=true --no-transfer-progress
+          mvn deploy -Plibs -pl java-wrapper,server \
+            --no-transfer-progress \
+            -DskipTests \
+            -Dgpg.skip=true \
+            -DaltDeploymentRepository=maven-repo::${{ secrets.MAVEN_REPO_URL }}
+        env:
+          MAVEN_REPO_USERNAME: ${{ secrets.MAVEN_REPO_USERNAME }}
+          MAVEN_REPO_PASSWORD: ${{ secrets.MAVEN_REPO_PASSWORD }}
+          MAVEN_OPTS: "-Dmaven.wagon.http.ssl.insecure=false"
