@@ -224,6 +224,7 @@ jobs:
       - name: Deploy to Maven Central
         if: ${{ !inputs.publish_to_alternative_repo }}
         run: |
+          sed -i 's|private static final String VERSION = ".*";|private static final String VERSION = "${{ env.DEPLOY_VERSION }}";|' java-wrapper/src/main/java/com/codedisaster/steamworks/Version.java
           mvn versions:set -DnewVersion=${{ env.DEPLOY_VERSION }} -DprocessAllModules=true --no-transfer-progress
           mvn deploy -Plibs -pl java-wrapper,server \
             --no-transfer-progress \
@@ -232,6 +233,7 @@ jobs:
       - name: Deploy to alternative repository
         if: ${{ inputs.publish_to_alternative_repo }}
         run: |
+          sed -i 's|private static final String VERSION = ".*";|private static final String VERSION = "${{ env.DEPLOY_VERSION }}";|' java-wrapper/src/main/java/com/codedisaster/steamworks/Version.java
           find . -name "pom.xml" -exec perl -i -0pe 's|\s*<plugin>\s*<groupId>org\.sonatype\.central</groupId>.*?</plugin>||gs' {} \;
           mvn versions:set -DnewVersion=${{ env.DEPLOY_VERSION }} -DprocessAllModules=true --no-transfer-progress
           mvn deploy -Plibs -pl java-wrapper,server \
