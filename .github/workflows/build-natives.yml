@@ -32,7 +32,6 @@ jobs:
 
   prepare:
     name: Download SDK and generate JNI code
-    if: ${{ !inputs.deploy_only }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -54,6 +53,7 @@ jobs:
           distribution: 'temurin'
 
       - name: Generate JNI code
+        if: ${{ !inputs.deploy_only }}
         run: |
           mvn compile -pl java-wrapper,server,jnigen --no-transfer-progress
           mvn exec:java -pl jnigen "-Dgpg.skip=true" "-Dexec.mainClass=com.codedisaster.steamworks.jnigen.JNICodeGenerator" --no-transfer-progress
@@ -237,6 +237,12 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Download SDK
+        uses: actions/download-artifact@v4
+        with:
+          name: sdk-and-jni-sources
+          path: .
 
       - name: Set up Java (Maven Central)
         if: ${{ !inputs.publish_to_alternative_repo }}
