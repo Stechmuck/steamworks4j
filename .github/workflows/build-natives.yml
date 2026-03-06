@@ -174,35 +174,56 @@ jobs:
             server/src/main/resources/libsteamworks4j-server.dylib
             server/src/main/resources/libsteamworks4j-encryptedappticket.dylib
 
-  deploy:
-    name: Deploy to Maven
+  commit-natives:
+    name: Commit native libraries
     runs-on: ubuntu-latest
     needs: [build-windows, build-linux, build-macos]
-    if: ${{ always() && !failure() && !cancelled() }}
+    if: ${{ always() && !failure() && !cancelled() && !inputs.deploy_only }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
       - name: Download Windows natives
-        if: ${{ !inputs.deploy_only && inputs.build_windows }}
+        if: ${{ inputs.build_windows }}
         uses: actions/download-artifact@v4
         with:
           name: natives-windows
           path: .
 
       - name: Download Linux natives
-        if: ${{ !inputs.deploy_only && inputs.build_linux }}
+        if: ${{ inputs.build_linux }}
         uses: actions/download-artifact@v4
         with:
           name: natives-linux
           path: .
 
       - name: Download macOS natives
-        if: ${{ !inputs.deploy_only && inputs.build_macos }}
+        if: ${{ inputs.build_macos }}
         uses: actions/download-artifact@v4
         with:
           name: natives-macos
           path: .
+
+      - name: Commit changed natives
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add java-wrapper/src/main/resources/ server/src/main/resources/
+          if git diff --cached --quiet; then
+            echo "No native libraries changed."
+          else
+            git commit -m "Update native libraries [skip ci]"
+            git push
+          fi
+
+  deploy:
+    name: Deploy to Maven
+    runs-on: ubuntu-latest
+    needs: [commit-natives]
+    if: ${{ always() && !failure() && !cancelled() }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
 
       - name: Set up Java (Maven Central)
         if: ${{ !inputs.publish_to_alternative_repo }}
