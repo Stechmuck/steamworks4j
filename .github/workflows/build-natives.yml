@@ -1,0 +1,10 @@
+name: Build Native Libraries
+
+on:
+  workflow_dispatch:
+
+jobs:
+  stub:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Run this workflow on the Inventory branch"
