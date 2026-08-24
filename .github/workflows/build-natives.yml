@@ -35,7 +35,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Download Steamworks SDK
         run: |
@@ -47,7 +47,7 @@ jobs:
           cp -r "$SDK_DIR/steamworks_sdk/redistributable_bin" sdk/redistributable_bin
 
       - name: Set up Java
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           java-version: '11'
           distribution: 'temurin'
@@ -59,7 +59,7 @@ jobs:
           mvn exec:java -pl jnigen "-Dgpg.skip=true" "-Dexec.mainClass=com.codedisaster.steamworks.jnigen.JNICodeGenerator" --no-transfer-progress
 
       - name: Upload SDK and generated sources
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: sdk-and-jni-sources
           retention-days: 1
@@ -75,10 +75,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Download SDK and generated sources
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: sdk-and-jni-sources
           path: .
@@ -91,7 +91,7 @@ jobs:
         run: bash build-linux.sh
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: natives-linux
           retention-days: 1
@@ -107,10 +107,10 @@ jobs:
     runs-on: windows-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Download SDK and generated sources
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: sdk-and-jni-sources
           path: .
@@ -130,7 +130,7 @@ jobs:
         run: cd build-natives && build-win.bat vs2022
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: natives-windows
           retention-days: 1
@@ -149,23 +149,28 @@ jobs:
     runs-on: macos-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Download SDK and generated sources
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: sdk-and-jni-sources
           path: .
 
       - name: Install premake5
-        run: brew install premake
+        run: |
+          # Das Runner-Image bringt aws/tap mit, den Homebrew inzwischen als nicht
+          # vertrauenswuerdig meldet. Fuer premake (aus homebrew-core) ist der Tap
+          # irrelevant, die Meldung verrauscht aber jedes Build-Log.
+          brew untap aws/tap 2>/dev/null || true
+          brew install premake
 
       - name: Build
         working-directory: build-natives
         run: bash build-osx.sh
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: natives-macos
           retention-days: 1
@@ -181,31 +186,31 @@ jobs:
     if: ${{ always() && !failure() && !cancelled() && !inputs.deploy_only }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Download Windows natives
         if: ${{ inputs.build_windows }}
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: natives-windows
           path: .
 
       - name: Download Linux natives
         if: ${{ inputs.build_linux }}
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: natives-linux
           path: .
 
       - name: Download macOS natives
         if: ${{ inputs.build_macos }}
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: natives-macos
           path: .
 
       - name: Download SDK redistributables
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: sdk-and-jni-sources
           path: .
@@ -236,10 +241,10 @@ jobs:
     if: ${{ always() && !failure() && !cancelled() }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Download SDK
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: sdk-and-jni-sources
           path: .
@@ -253,35 +258,35 @@ jobs:
       # nicht und der Repo-Stand ist korrekterweise die Quelle.
       - name: Download Windows natives
         if: ${{ !inputs.deploy_only && inputs.build_windows }}
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: natives-windows
           path: .
 
       - name: Download Linux natives
         if: ${{ !inputs.deploy_only && inputs.build_linux }}
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: natives-linux
           path: .
 
       - name: Download macOS natives
         if: ${{ !inputs.deploy_only && inputs.build_macos }}
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: natives-macos
           path: .
 
       - name: Set up Java (Maven Central)
         if: ${{ !inputs.publish_to_alternative_repo }}
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           java-version: '11'
           distribution: 'temurin'
 
       - name: Set up Java (alternative repository)
         if: ${{ inputs.publish_to_alternative_repo }}
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           java-version: '11'
           distribution: 'temurin'
