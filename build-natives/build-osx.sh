@@ -1,7 +1,16 @@
 #!/usr/bin/env bash
 
+# Ohne -e liefe das Skript nach einem Fehlschlag weiter und endete mit dem
+# Exit-Code des letzten Befehls (dem Aufraeumen), also mit 0. Der CI-Job stand
+# dann auf gruen, obwohl keine einzige Bibliothek gebaut wurde, und
+# commit-natives uebernahm die unveraenderten alten Binaries.
+set -euo pipefail
+
 build_architecture() {
-    ./premake5 --file=build-osx-$1.lua xcode4
+    # premake5 kommt aus dem PATH (im CI via "brew install premake"), es liegt
+    # nicht in diesem Verzeichnis. Linux und Windows rufen es ebenfalls ohne
+    # Pfadangabe auf.
+    premake5 --file=build-osx-$1.lua xcode4
 
     xcodebuild -project steamworks4j-$1.xcodeproj -alltargets clean
     xcodebuild -project steamworks4j-$1.xcodeproj -configuration ReleaseDLL
@@ -24,7 +33,10 @@ lipo -create ../java-wrapper/src/main/resources/libsteamworks4j-arm64.dylib ../j
 lipo -create ../server/src/main/resources/libsteamworks4j-encryptedappticket-arm64.dylib ../server/src/main/resources/libsteamworks4j-encryptedappticket-x86_64.dylib -output ../server/src/main/resources/libsteamworks4j-encryptedappticket.dylib
 lipo -create ../server/src/main/resources/libsteamworks4j-server-arm64.dylib ../server/src/main/resources/libsteamworks4j-server-x86_64.dylib -output ../server/src/main/resources/libsteamworks4j-server.dylib
 
-# Delete all intermediate libs
-find .. | grep x86_64.dylib | xargs rm
-find .. | grep arm64.dylib | xargs rm
+# Delete all intermediate libs.
+# -delete statt "grep | xargs rm": Unter set -euo pipefail wuerde ein grep ohne
+# Treffer den Exit-Code 1 liefern und das Skript hier abbrechen, obwohl der Build
+# erfolgreich war.
+find .. -name "*-x86_64.dylib" -delete
+find .. -name "*-arm64.dylib" -delete
 
