@@ -10,6 +10,7 @@ final class SteamInventoryNative {
 		#include "SteamInventoryCallback.h"
 		#include <vector>
 		#include <cstdlib>
+		#include <cstring>
 	*/
 
 	static native long createCallback(SteamInventoryCallbackAdapter javaCallback); /*
@@ -167,23 +168,62 @@ final class SteamInventoryNative {
 	*/
 
 	static native String getItemDefinitionPropertyKeys(int itemDefinition); /*
-		char *valueBuffer = (char*) malloc(1);
+		// Erster Aufruf mit NULL-Puffer liefert nur die benoetigte Groesse.
 		uint32 valueBufferSizeOut = 0;
-		SteamInventory()->GetItemDefinitionProperty((SteamItemDef_t) itemDefinition, NULL, valueBuffer, &valueBufferSizeOut);
-		valueBuffer = (char*) malloc(valueBufferSizeOut);
-		SteamInventory()->GetItemDefinitionProperty((SteamItemDef_t) itemDefinition, NULL, valueBuffer, &valueBufferSizeOut);
-		return env->NewStringUTF(valueBuffer);
+		if (!SteamInventory()->GetItemDefinitionProperty((SteamItemDef_t) itemDefinition, NULL, NULL, &valueBufferSizeOut)) {
+			return NULL;
+		}
+		if (valueBufferSizeOut == 0) {
+			return env->NewStringUTF("");
+		}
+		// Ein Byte extra, damit der String auch dann terminiert ist, wenn Steam
+		// den Puffer randvoll ohne abschliessende 0 fuellt.
+		char *valueBuffer = (char*) malloc(valueBufferSizeOut + 1);
+		if (valueBuffer == NULL) {
+			return NULL;
+		}
+		memset(valueBuffer, 0, valueBufferSizeOut + 1);
+		jstring result = NULL;
+		if (SteamInventory()->GetItemDefinitionProperty((SteamItemDef_t) itemDefinition, NULL, valueBuffer, &valueBufferSizeOut)) {
+			valueBuffer[valueBufferSizeOut] = '\0';
+			result = env->NewStringUTF(valueBuffer);
+		}
+		free(valueBuffer);
+		return result;
 	*/
 
 	static native boolean getItemDefinitionProperty(int itemDefinition, String propertyName, SteamStringValue value); /*
-		char *valueBuffer = (char*) malloc(1);
-		uint32 valueBufferSizeOut = 0;
-		SteamInventory()->GetItemDefinitionProperty((SteamItemDef_t) itemDefinition, propertyName, valueBuffer, &valueBufferSizeOut);
-		valueBuffer = (char*) malloc(valueBufferSizeOut);
-		bool success = SteamInventory()->GetItemDefinitionProperty((SteamItemDef_t) itemDefinition, propertyName, valueBuffer, &valueBufferSizeOut);
 		jclass valueClazz = env->GetObjectClass(value);
 		jfieldID field = env->GetFieldID(valueClazz, "value", "Ljava/lang/String;");
-		env->SetObjectField(value, field, env->NewStringUTF(valueBuffer));
+
+		// Erster Aufruf mit NULL-Puffer liefert nur die benoetigte Groesse.
+		// Existiert die Property nicht, schlaegt schon dieser Aufruf fehl -- dann darf
+		// der Puffer nicht gelesen werden, er ist uninitialisiert.
+		uint32 valueBufferSizeOut = 0;
+		if (!SteamInventory()->GetItemDefinitionProperty((SteamItemDef_t) itemDefinition, propertyName, NULL, &valueBufferSizeOut)) {
+			env->SetObjectField(value, field, NULL);
+			return false;
+		}
+		if (valueBufferSizeOut == 0) {
+			env->SetObjectField(value, field, env->NewStringUTF(""));
+			return true;
+		}
+		// Ein Byte extra, damit der String auch dann terminiert ist, wenn Steam
+		// den Puffer randvoll ohne abschliessende 0 fuellt.
+		char *valueBuffer = (char*) malloc(valueBufferSizeOut + 1);
+		if (valueBuffer == NULL) {
+			env->SetObjectField(value, field, NULL);
+			return false;
+		}
+		memset(valueBuffer, 0, valueBufferSizeOut + 1);
+		bool success = SteamInventory()->GetItemDefinitionProperty((SteamItemDef_t) itemDefinition, propertyName, valueBuffer, &valueBufferSizeOut);
+		if (success) {
+			valueBuffer[valueBufferSizeOut] = '\0';
+			env->SetObjectField(value, field, env->NewStringUTF(valueBuffer));
+		} else {
+			env->SetObjectField(value, field, NULL);
+		}
+		free(valueBuffer);
 		return success;
 	*/
 

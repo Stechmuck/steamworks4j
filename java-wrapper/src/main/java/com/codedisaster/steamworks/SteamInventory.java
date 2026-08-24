@@ -240,7 +240,12 @@ public class SteamInventory extends SteamInterface {
     public boolean getItemDefinitionProperty(final int itemDefinition, final String propertyName, final List<String> values) {
         final SteamStringValue steamValue = new SteamStringValue();
         final boolean result = SteamInventoryNative.getItemDefinitionProperty(itemDefinition, propertyName, steamValue);
-        values.add(steamValue.getValue());
+        // Nur bei Erfolg etwas anhaengen: Existiert die Property nicht, wuerde sonst
+        // null in der Liste landen und Aufrufer, die nur auf isEmpty() pruefen,
+        // wuerden einen Wert sehen, den es gar nicht gibt.
+        if (result && steamValue.getValue() != null) {
+            values.add(steamValue.getValue());
+        }
         return result;
     }
 
