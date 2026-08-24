@@ -7,7 +7,7 @@ solution "steamworks4j-x86_64"
 		"--target=x86_64-apple-macos10.9"
 	}
 
-	sysincludedirs {
+	externalincludedirs {
 		"../java-wrapper/src/main/native/include/jni",
 		"../java-wrapper/src/main/native/include/jni/mac",
 		"../sdk/public/steam",
@@ -37,7 +37,7 @@ solution "steamworks4j-x86_64"
 			"../java-wrapper/src/main/native/**.cpp"
 		}
 
-		sysincludedirs {
+		externalincludedirs {
 			"../java-wrapper/src/main/native"
 		}
 
@@ -62,7 +62,7 @@ solution "steamworks4j-x86_64"
 			"../server/src/main/native/**EncryptedAppTicket*.cpp"
 		}
 
-		sysincludedirs {
+		externalincludedirs {
 			"../server/src/main/native"
 		}
 
@@ -83,7 +83,7 @@ solution "steamworks4j-x86_64"
 			"../server/src/main/native/**EncryptedAppTicket*.cpp"
 		}
 
-		sysincludedirs {
+		externalincludedirs {
 			"../server/src/main/native"
 		}
 
