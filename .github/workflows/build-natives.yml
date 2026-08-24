@@ -26,7 +26,7 @@ on:
 
 env:
   STEAMWORKS_SDK_SOURCE: "https://github.com/julianxhokaxhiu/SteamworksSDKCI/archive/refs/tags/1.62.zip"
-  DEPLOY_VERSION: "1.10.2-inventory"
+  DEPLOY_VERSION: "1.10.3-inventory"
 
 jobs:
 
@@ -242,6 +242,34 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: sdk-and-jni-sources
+          path: .
+
+      # Die frisch gebauten Bibliotheken direkt aus den Artefakten holen, nicht aus
+      # dem Checkout. commit-natives pusht sie zwar ins Repo, aber der Checkout oben
+      # steht auf dem Commit, mit dem der Lauf gestartet wurde -- der Push kommt
+      # danach. Ohne diese Downloads wuerde hier der Binaerstand des *vorherigen*
+      # Laufs verpackt, was schon einmal ein Release mit veralteter dylib erzeugt hat.
+      # Bei deploy_only laufen die Build-Jobs nicht; dann existieren die Artefakte
+      # nicht und der Repo-Stand ist korrekterweise die Quelle.
+      - name: Download Windows natives
+        if: ${{ !inputs.deploy_only && inputs.build_windows }}
+        uses: actions/download-artifact@v4
+        with:
+          name: natives-windows
+          path: .
+
+      - name: Download Linux natives
+        if: ${{ !inputs.deploy_only && inputs.build_linux }}
+        uses: actions/download-artifact@v4
+        with:
+          name: natives-linux
+          path: .
+
+      - name: Download macOS natives
+        if: ${{ !inputs.deploy_only && inputs.build_macos }}
+        uses: actions/download-artifact@v4
+        with:
+          name: natives-macos
           path: .
 
       - name: Set up Java (Maven Central)
